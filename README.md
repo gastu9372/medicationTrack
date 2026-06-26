@@ -21,6 +21,17 @@ La aplicación destaca por su enfoque en una experiencia de usuario limpia, adap
   - Capacidad de posponer alarmas (snooze) por 15 minutos.
 - **Modo Oscuro / Claro Adaptativo:** Interfaz de usuario de diseño premium con soporte para temas Claro, Oscuro y adaptativo según el sistema operativo.
 
+
+---
+
+## 📲 Descarga e Instalación (APK)
+
+Si quieres instalar la aplicación directamente en tu dispositivo Android para testearla o usarla de forma personal:
+
+1. **Descarga el APK:** Ve a la sección de **[Releases de GitHub](https://github.com/gastu9372/medicationTrack/releases)** de este repositorio y descarga el archivo `app-release.apk` de la versión más reciente.
+2. **Permite la instalación:** Abre el archivo descargado en tu teléfono. Si tu sistema te lo solicita, activa el permiso de **"Instalar aplicaciones desconocidas"** para tu gestor de archivos o navegador.
+3. **Instala de todas formas:** Si la advertencia de seguridad *Google Play Protect* bloquea el inicio de la instalación (debido a que la app está auto-firmada fuera de la tienda oficial), selecciona la opción **"Instalar de todas formas"** para finalizar la instalación.
+
 ---
 
 ## 🛠️ Tecnologías Utilizadas
