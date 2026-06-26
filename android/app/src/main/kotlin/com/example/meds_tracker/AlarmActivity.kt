@@ -1,4 +1,4 @@
-package com.example.medstracker
+package com.example.meds_tracker
 
 import android.app.Activity
 import android.app.KeyguardManager
@@ -11,6 +11,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
 import android.util.Log
+import com.example.meds_tracker.R
 
 class AlarmActivity : Activity() {
 

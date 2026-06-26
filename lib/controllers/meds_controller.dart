@@ -9,6 +9,11 @@ class MedsController {
   // Method to request overlay permission on Android
   Future<bool> checkAndRequestPermissions() async {
     try {
+      bool hasNotification = await _channel.invokeMethod<bool>('checkNotificationPermission') ?? false;
+      if (!hasNotification) {
+        await _channel.invokeMethod('requestNotificationPermission');
+      }
+
       bool hasOverlay = await _channel.invokeMethod<bool>('checkOverlayPermission') ?? false;
       if (!hasOverlay) {
         await _channel.invokeMethod('requestOverlayPermission');
@@ -19,7 +24,7 @@ class MedsController {
         await _channel.invokeMethod('requestExactAlarmPermission');
       }
 
-      return hasOverlay && hasExactAlarm;
+      return hasNotification && hasOverlay && hasExactAlarm;
     } catch (e) {
       print("Error managing permissions: $e");
       return false;

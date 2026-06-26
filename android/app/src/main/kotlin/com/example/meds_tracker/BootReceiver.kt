@@ -1,4 +1,4 @@
-package com.example.medstracker
+package com.example.meds_tracker
 
 import android.content.BroadcastReceiver
 import android.content.Context

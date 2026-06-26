@@ -1,4 +1,4 @@
-package com.example.medstracker
+package com.example.meds_tracker
 
 import android.app.AlarmManager
 import android.app.PendingIntent

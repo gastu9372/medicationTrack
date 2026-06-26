@@ -1,4 +1,4 @@
-package com.example.medstracker
+package com.example.meds_tracker
 
 import android.content.ContentValues
 import android.content.Context
@@ -143,4 +143,3 @@ class DatabaseHelper(private val context: Context) {
         return list
     }
 }
-

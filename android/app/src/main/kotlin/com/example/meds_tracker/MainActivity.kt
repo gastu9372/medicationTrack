@@ -1,4 +1,4 @@
-package com.example.medstracker
+package com.example.meds_tracker
 
 import android.app.AlarmManager
 import android.content.Context
@@ -34,9 +34,27 @@ class MainActivity: FlutterActivity() {
                     val alarmId = call.argument<Int>("alarmId")
                     if (alarmId != null) {
                         AlarmScheduler.cancelAlarm(this, alarmId)
+                        // Force stop the ringtone service
+                        stopService(Intent(this, AlarmService::class.java))
                         result.success(true)
                     } else {
                         result.error("INVALID_ARGUMENTS", "Argument alarmId was null", null)
+                    }
+                }
+                "checkNotificationPermission" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val hasPermission = checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        result.success(hasPermission)
+                    } else {
+                        result.success(true)
+                    }
+                }
+                "requestNotificationPermission" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+                        result.success(true)
+                    } else {
+                        result.success(true)
                     }
                 }
                 "checkOverlayPermission" -> {
