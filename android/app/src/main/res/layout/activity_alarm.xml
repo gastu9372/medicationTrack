@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_size"
+    android:layout_height="match_parent"
+    android:background="@drawable/alarm_gradient"
+    android:padding="24dp"
+    android:keepScreenOn="true">
+
+    <!-- Header / Icon -->
+    <LinearLayout
+        android:id="@+id/header_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginTop="80dp">
+
+        <View
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="@drawable/button_rounded_take"
+            android:backgroundTint="#6366F1"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RECORDATORIO DE MEDICAMENTO"
+            android:textColor="#818CF8"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.1" />
+    </LinearLayout>
+
+    <!-- Medicine Detail Section -->
+    <LinearLayout
+        android:id="@+id/detail_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_below="@id/header_container"
+        android:layout_marginTop="40dp"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/tv_medicine_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Ibuprofeno"
+            android:textColor="#FFFFFF"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/tv_medicine_dosage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="600 mg - Con el almuerzo"
+            android:textColor="#94A3B8"
+            android:textSize="18sp"
+            android:layout_marginTop="8dp"
+            android:gravity="center" />
+    </LinearLayout>
+
+    <!-- Action Buttons Container -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="60dp"
+        android:gravity="center">
+
+        <!-- Take Action Button -->
+        <Button
+            android:id="@+id/btn_take"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:background="@drawable/button_rounded_take"
+            android:text="MARCAR COMO TOMADO"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:elevation="4dp"
+            android:foreground="?android:attr/selectableItemBackground" />
+
+        <!-- Snooze Action Button -->
+        <Button
+            android:id="@+id/btn_snooze"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:background="@drawable/button_rounded_snooze"
+            android:text="POSPONER 15 MIN"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            android:foreground="?android:attr/selectableItemBackground" />
+    </LinearLayout>
+
+</RelativeLayout>
