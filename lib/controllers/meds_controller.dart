@@ -38,19 +38,23 @@ class MedsController {
     required String dosage,
     required String scheduleType,
     required List<String> scheduleTimes,
+    List<int>? selectedDays,
   }) async {
     // 1. Insert medication
     final medId = await _dbHelper.insertMedicine({
       'name': name,
       'dosage': dosage,
       'schedule_type': scheduleType,
-      'schedule_value': jsonEncode(scheduleTimes),
+      'schedule_value': jsonEncode({
+        'times': scheduleTimes,
+        'days': selectedDays ?? [],
+      }),
       'is_active': 1,
     });
 
     // 2. Schedule alarms for each time slot
     for (String timeStr in scheduleTimes) {
-      await _scheduleNextAlarm(medId, timeStr);
+      await _scheduleAlarmForTime(medId, timeStr, scheduleType, selectedDays);
     }
 
     return medId;
@@ -68,7 +72,9 @@ class MedsController {
     );
     for (var alarm in alarms) {
       if (alarm['medicine_id'] == id && alarm['status'] == 'pending') {
-        await _channel.invokeMethod('cancelAlarm', {'alarmId': alarm['id']});
+        try {
+          await _channel.invokeMethod('cancelAlarm', {'alarmId': alarm['id']});
+        } catch (_) {}
       }
     }
     await _dbHelper.deleteMedicine(id);
@@ -76,58 +82,119 @@ class MedsController {
 
   // --- Internal Alarm Schedulers ---
 
-  Future<void> _scheduleNextAlarm(int medicineId, String timeStr) async {
+  Future<void> _scheduleAlarmForTime(
+    int medicineId,
+    String timeStr,
+    String scheduleType,
+    List<int>? selectedDays,
+  ) async {
     final parts = timeStr.split(':');
     final hour = int.parse(parts[0]);
     final minute = int.parse(parts[1]);
 
     final now = DateTime.now();
-    final todayTime = DateTime(now.year, now.month, now.day, hour, minute);
 
-    if (todayTime.isBefore(now)) {
-      // 1. Create a placeholder alarm for today (passed) so it shows in today's timeline
-      await _dbHelper.insertAlarm({
-        'medicine_id': medicineId,
-        'scheduled_time': todayTime.millisecondsSinceEpoch,
-        'status': 'pending',
-      });
+    if (scheduleType == 'daily') {
+      final todayTime = DateTime(now.year, now.month, now.day, hour, minute);
 
-      // 2. Create and schedule the actual alarm for tomorrow
-      final tomorrowTime = todayTime.add(const Duration(days: 1));
-      final tomorrowAlarmId = await _dbHelper.insertAlarm({
-        'medicine_id': medicineId,
-        'scheduled_time': tomorrowTime.millisecondsSinceEpoch,
-        'status': 'pending',
-      });
-
-      try {
-        await _channel.invokeMethod('scheduleAlarm', {
-          'alarmId': tomorrowAlarmId,
-          'triggerTimeMs': tomorrowTime.millisecondsSinceEpoch,
-          'medicineId': medicineId,
+      if (todayTime.isBefore(now)) {
+        // 1. Create a placeholder alarm for today (passed) so it shows in today's timeline
+        await _dbHelper.insertAlarm({
+          'medicine_id': medicineId,
+          'scheduled_time': todayTime.millisecondsSinceEpoch,
+          'status': 'pending',
         });
+
+        // 2. Create and schedule the actual alarm for tomorrow
+        final tomorrowTime = todayTime.add(const Duration(days: 1));
+        final tomorrowAlarmId = await _dbHelper.insertAlarm({
+          'medicine_id': medicineId,
+          'scheduled_time': tomorrowTime.millisecondsSinceEpoch,
+          'status': 'pending',
+        });
+
+        await _registerSystemAlarm(tomorrowAlarmId, tomorrowTime.millisecondsSinceEpoch, medicineId);
         print("Scheduled tomorrow's alarm ID $tomorrowAlarmId at $tomorrowTime for medicine $medicineId");
-      } catch (e) {
-        print("Failed to schedule tomorrow alarm: $e");
+      } else {
+        // The time is in the future today, schedule normally
+        final alarmId = await _dbHelper.insertAlarm({
+          'medicine_id': medicineId,
+          'scheduled_time': todayTime.millisecondsSinceEpoch,
+          'status': 'pending',
+        });
+
+        await _registerSystemAlarm(alarmId, todayTime.millisecondsSinceEpoch, medicineId);
+        print("Scheduled today's alarm ID $alarmId at $todayTime for medicine $medicineId");
       }
     } else {
-      // The time is in the future today, schedule normally
+      // Days of the week
+      final List<int> days = selectedDays ?? [];
+      if (days.isEmpty) return;
+
+      final targetTime = _calculateNextOccurrenceForDays(timeStr, days);
+
       final alarmId = await _dbHelper.insertAlarm({
         'medicine_id': medicineId,
-        'scheduled_time': todayTime.millisecondsSinceEpoch,
+        'scheduled_time': targetTime.millisecondsSinceEpoch,
         'status': 'pending',
       });
 
-      try {
-        await _channel.invokeMethod('scheduleAlarm', {
-          'alarmId': alarmId,
-          'triggerTimeMs': todayTime.millisecondsSinceEpoch,
-          'medicineId': medicineId,
-        });
-        print("Scheduled today's alarm ID $alarmId at $todayTime for medicine $medicineId");
-      } catch (e) {
-        print("Failed to schedule alarm: $e");
+      await _registerSystemAlarm(alarmId, targetTime.millisecondsSinceEpoch, medicineId);
+      print("Scheduled custom days alarm ID $alarmId at $targetTime for medicine $medicineId");
+
+      // Add a placeholder for today if today was a selected day but the time has already passed
+      if (days.contains(now.weekday)) {
+        final todayTime = DateTime(now.year, now.month, now.day, hour, minute);
+        if (todayTime.isBefore(now)) {
+          await _dbHelper.insertAlarm({
+            'medicine_id': medicineId,
+            'scheduled_time': todayTime.millisecondsSinceEpoch,
+            'status': 'pending',
+          });
+        }
       }
+    }
+  }
+
+  DateTime _calculateNextOccurrenceForDays(String timeStr, List<int> selectedDays) {
+    final parts = timeStr.split(':');
+    final hour = int.parse(parts[0]);
+    final minute = int.parse(parts[1]);
+
+    final now = DateTime.now();
+
+    for (int i = 0; i < 8; i++) {
+      final candidateDate = now.add(Duration(days: i));
+      final candidateDayOfWeek = candidateDate.weekday; // 1 = Monday, 7 = Sunday
+
+      if (selectedDays.contains(candidateDayOfWeek)) {
+        final scheduledTime = DateTime(
+          candidateDate.year,
+          candidateDate.month,
+          candidateDate.day,
+          hour,
+          minute,
+        );
+
+        // If candidate is today but the time already passed, skip today
+        if (i == 0 && scheduledTime.isBefore(now)) {
+          continue;
+        }
+        return scheduledTime;
+      }
+    }
+    return now.add(const Duration(days: 1));
+  }
+
+  Future<void> _registerSystemAlarm(int alarmId, int triggerTimeMs, int medicineId) async {
+    try {
+      await _channel.invokeMethod('scheduleAlarm', {
+        'alarmId': alarmId,
+        'triggerTimeMs': triggerTimeMs,
+        'medicineId': medicineId,
+      });
+    } catch (e) {
+      print("Failed to schedule system alarm: $e");
     }
   }
 
