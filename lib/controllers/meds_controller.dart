@@ -31,6 +31,26 @@ class MedsController {
     }
   }
 
+  // Check the individual status of each permission
+  Future<Map<String, bool>> checkPermissionsDetail() async {
+    try {
+      bool hasNotification = await _channel.invokeMethod<bool>('checkNotificationPermission') ?? false;
+      bool hasOverlay = await _channel.invokeMethod<bool>('checkOverlayPermission') ?? false;
+      bool hasExactAlarm = await _channel.invokeMethod<bool>('checkExactAlarmPermission') ?? false;
+      return {
+        'notification': hasNotification,
+        'overlay': hasOverlay,
+        'exactAlarm': hasExactAlarm,
+      };
+    } catch (_) {
+      return {
+        'notification': false,
+        'overlay': false,
+        'exactAlarm': false,
+      };
+    }
+  }
+
   // --- CRUD Medicines ---
 
   Future<int> addMedicine({
@@ -78,6 +98,47 @@ class MedsController {
       }
     }
     await _dbHelper.deleteMedicine(id);
+  }
+
+  Future<void> updateMedicine({
+    required int id,
+    required String name,
+    required String dosage,
+    required String scheduleType,
+    required List<String> scheduleTimes,
+    List<int>? selectedDays,
+  }) async {
+    // 1. Update medication in database
+    await _dbHelper.updateMedicine({
+      'id': id,
+      'name': name,
+      'dosage': dosage,
+      'schedule_type': scheduleType,
+      'schedule_value': jsonEncode({
+        'times': scheduleTimes,
+        'days': selectedDays ?? [],
+      }),
+      'is_active': 1,
+    });
+
+    // 2. Cancel and delete all pending alarms for this medicine
+    final alarms = await _dbHelper.queryAlarmsForDay(
+      DateTime.now().subtract(const Duration(days: 1)).millisecondsSinceEpoch,
+      DateTime.now().add(const Duration(days: 7)).millisecondsSinceEpoch,
+    );
+    for (var alarm in alarms) {
+      if (alarm['medicine_id'] == id && alarm['status'] == 'pending') {
+        try {
+          await _channel.invokeMethod('cancelAlarm', {'alarmId': alarm['id']});
+        } catch (_) {}
+      }
+    }
+    await _dbHelper.deletePendingAlarmsForMedicine(id);
+
+    // 3. Reschedule the new alarms for this medicine
+    for (String timeStr in scheduleTimes) {
+      await _scheduleAlarmForTime(id, timeStr, scheduleType, selectedDays);
+    }
   }
 
   // --- Internal Alarm Schedulers ---
@@ -224,6 +285,19 @@ class MedsController {
     } catch (_) {}
   }
 
+  Future<void> markMissed(int alarmId, int medicineId, int scheduledTimeMs) async {
+    await _dbHelper.updateAlarmStatus(alarmId, 'missed');
+    await _dbHelper.insertComplianceLog({
+      'medicine_id': medicineId,
+      'scheduled_time': scheduledTimeMs,
+      'status': 'missed',
+      'action_time': DateTime.now().millisecondsSinceEpoch,
+    });
+    try {
+      await _channel.invokeMethod('cancelAlarm', {'alarmId': alarmId});
+    } catch (_) {}
+  }
+
   Future<void> markSnoozed(int alarmId, int medicineId, int scheduledTimeMs) async {
     await _dbHelper.updateAlarmStatus(alarmId, 'snoozed');
     await _dbHelper.insertComplianceLog({
@@ -251,5 +325,35 @@ class MedsController {
       });
       await _channel.invokeMethod('cancelAlarm', {'alarmId': alarmId});
     } catch (_) {}
+  }
+
+  Future<Map<int, double>> getWeeklyCompliance() async {
+    final now = DateTime.now();
+    // Find the Monday of the current week
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final startOfWeek = DateTime(monday.year, monday.month, monday.day, 0, 0, 0).millisecondsSinceEpoch;
+
+    // Find the Sunday of the current week
+    final sunday = monday.add(const Duration(days: 6));
+    final endOfWeek = DateTime(sunday.year, sunday.month, sunday.day, 23, 59, 59).millisecondsSinceEpoch;
+
+    final alarms = await _dbHelper.queryAlarmsForDay(startOfWeek, endOfWeek);
+
+    final Map<int, double> complianceMap = {};
+    for (int day = 1; day <= 7; day++) {
+      final dayAlarms = alarms.where((alarm) {
+        final alarmDate = DateTime.fromMillisecondsSinceEpoch(alarm['scheduled_time']);
+        return alarmDate.weekday == day;
+      }).toList();
+
+      final activeAlarms = dayAlarms.where((alarm) => alarm['status'] != 'snoozed').toList();
+      if (activeAlarms.isEmpty) {
+        complianceMap[day] = -1.0; // No alarms scheduled
+      } else {
+        final takenCount = activeAlarms.where((alarm) => alarm['status'] == 'taken').length;
+        complianceMap[day] = takenCount / activeAlarms.length;
+      }
+    }
+    return complianceMap;
   }
 }
