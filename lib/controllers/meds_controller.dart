@@ -77,43 +77,58 @@ class MedsController {
   // --- Internal Alarm Schedulers ---
 
   Future<void> _scheduleNextAlarm(int medicineId, String timeStr) async {
-    final nextTime = _calculateNextOccurrence(timeStr);
-    final triggerTimeMs = nextTime.millisecondsSinceEpoch;
-
-    // 1. Insert alarm into SQLite in pending state
-    final alarmId = await _dbHelper.insertAlarm({
-      'medicine_id': medicineId,
-      'scheduled_time': triggerTimeMs,
-      'status': 'pending',
-    });
-
-    // 2. Schedule the alarm in Android's AlarmManager via MethodChannel
-    try {
-      await _channel.invokeMethod('scheduleAlarm', {
-        'alarmId': alarmId,
-        'triggerTimeMs': triggerTimeMs,
-        'medicineId': medicineId,
-      });
-      print("Scheduled alarm ID $alarmId at $nextTime for medicine $medicineId");
-    } catch (e) {
-      print("Failed to schedule alarm via platform channel: $e");
-    }
-  }
-
-  DateTime _calculateNextOccurrence(String timeStr) {
-    // Expects "HH:mm" format (e.g. "08:30" or "20:00")
     final parts = timeStr.split(':');
     final hour = int.parse(parts[0]);
     final minute = int.parse(parts[1]);
 
     final now = DateTime.now();
-    var scheduledDateTime = DateTime(now.year, now.month, now.day, hour, minute);
+    final todayTime = DateTime(now.year, now.month, now.day, hour, minute);
 
-    if (scheduledDateTime.isBefore(now)) {
-      // If the time has already passed today, schedule for tomorrow
-      scheduledDateTime = scheduledDateTime.add(const Duration(days: 1));
+    if (todayTime.isBefore(now)) {
+      // 1. Create a placeholder alarm for today (passed) so it shows in today's timeline
+      await _dbHelper.insertAlarm({
+        'medicine_id': medicineId,
+        'scheduled_time': todayTime.millisecondsSinceEpoch,
+        'status': 'pending',
+      });
+
+      // 2. Create and schedule the actual alarm for tomorrow
+      final tomorrowTime = todayTime.add(const Duration(days: 1));
+      final tomorrowAlarmId = await _dbHelper.insertAlarm({
+        'medicine_id': medicineId,
+        'scheduled_time': tomorrowTime.millisecondsSinceEpoch,
+        'status': 'pending',
+      });
+
+      try {
+        await _channel.invokeMethod('scheduleAlarm', {
+          'alarmId': tomorrowAlarmId,
+          'triggerTimeMs': tomorrowTime.millisecondsSinceEpoch,
+          'medicineId': medicineId,
+        });
+        print("Scheduled tomorrow's alarm ID $tomorrowAlarmId at $tomorrowTime for medicine $medicineId");
+      } catch (e) {
+        print("Failed to schedule tomorrow alarm: $e");
+      }
+    } else {
+      // The time is in the future today, schedule normally
+      final alarmId = await _dbHelper.insertAlarm({
+        'medicine_id': medicineId,
+        'scheduled_time': todayTime.millisecondsSinceEpoch,
+        'status': 'pending',
+      });
+
+      try {
+        await _channel.invokeMethod('scheduleAlarm', {
+          'alarmId': alarmId,
+          'triggerTimeMs': todayTime.millisecondsSinceEpoch,
+          'medicineId': medicineId,
+        });
+        print("Scheduled today's alarm ID $alarmId at $todayTime for medicine $medicineId");
+      } catch (e) {
+        print("Failed to schedule alarm: $e");
+      }
     }
-    return scheduledDateTime;
   }
 
   // --- Tracker / Compliance Ops ---
