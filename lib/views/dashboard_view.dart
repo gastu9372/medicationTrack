@@ -812,7 +812,7 @@ class _DashboardViewState extends State<DashboardView> {
                     left: 24,
                     right: 24,
                     top: 16,
-                    bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24,
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -1037,34 +1037,59 @@ class _DashboardViewState extends State<DashboardView> {
                         ),
                       ),
                       const SizedBox(height: 20),
+                      if (!_permissionsGranted) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              await _controller.checkAndRequestPermissions();
+                              final detail = await _controller.checkPermissionsDetail();
+                              final granted = detail.values.every((v) => v);
+                              
+                              // Update both bottom sheet state and main widget state
+                              setBottomSheetState(() {
+                                _permissionsGranted = granted;
+                                _permissionsDetail = detail;
+                              });
+                              setState(() {
+                                _permissionsGranted = granted;
+                                _permissionsDetail = detail;
+                              });
+                              
+                              // Reload timeline
+                              final timeline = await _controller.getTodayTimeline();
+                              final medicines = await _controller.getAllMedicines();
+                              final compliance = await _controller.getWeeklyCompliance();
+                              setState(() {
+                                _todayTimeline = timeline;
+                                _allMedicines = medicines;
+                                _weeklyCompliance = compliance;
+                              });
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6366F1),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              "Recomprobar y Otorgar Permisos",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () async {
-                            await _controller.checkAndRequestPermissions();
-                            final detail = await _controller.checkPermissionsDetail();
-                            final granted = detail.values.every((v) => v);
-                            
-                            // Update both bottom sheet state and main widget state
-                            setBottomSheetState(() {
-                              _permissionsGranted = granted;
-                              _permissionsDetail = detail;
-                            });
-                            setState(() {
-                              _permissionsGranted = granted;
-                              _permissionsDetail = detail;
-                            });
-                            
-                            // Reload timeline
-                            final timeline = await _controller.getTodayTimeline();
-                            final medicines = await _controller.getAllMedicines();
-                            final compliance = await _controller.getWeeklyCompliance();
-                            setState(() {
-                              _todayTimeline = timeline;
-                              _allMedicines = medicines;
-                              _weeklyCompliance = compliance;
-                            });
-                          },
+                          onPressed: () => Navigator.pop(context),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6366F1),
                             foregroundColor: Colors.white,
@@ -1075,7 +1100,7 @@ class _DashboardViewState extends State<DashboardView> {
                             elevation: 0,
                           ),
                           child: const Text(
-                            "Recomprobar y Otorgar Permisos",
+                            "Aceptar",
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
