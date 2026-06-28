@@ -19,7 +19,9 @@ La aplicación destaca por su enfoque en una experiencia de usuario limpia, adap
 - **Alertas y Alarmas de Alta Prioridad:** Utiliza alarmas del sistema y notificaciones nativas de Android.
   - Soporta pantallas de bloqueo (bloqueo por overlay) para alertar al usuario incluso si el dispositivo está inactivo.
   - Capacidad de posponer alarmas (snooze) por 15 minutos.
-- **Modo Oscuro / Claro Adaptativo:** Interfaz de usuario de diseño premium con soporte para temas Claro, Oscuro y adaptativo según el sistema operativo.
+  - **Personalización de Alertas:** Permite activar o desactivar el "Ruido tipo alarma" (pantalla completa con o sin sonido continuo) y seleccionar cualquier tono nativo del dispositivo mediante el selector oficial del sistema.
+  - **Auto-Reprogramación Inteligente:** Auto-reprograma la siguiente dosis de medicamentos diarios y periódicos al sonar el recordatorio o al marcarlo de forma anticipada. Incluye un mecanismo de red de seguridad al abrir la app para recuperar alarmas perdidas si el dispositivo estuvo apagado.
+- **Modo Oscuro / Claro Adaptativo:** Interfaz de usuario de diseño premium con soporte para temas Claro, Oscuro y adaptativo según el sistema operativo (con persistencia).
 
 
 ---
@@ -45,3 +47,4 @@ El proyecto está construido sobre un stack móvil moderno que aprovecha capacid
   - Canal de comunicación bidireccional entre Flutter y código nativo de Android (Kotlin/Java) para gestionar tareas del sistema de bajo nivel.
   - **Servicio de Alarmas Exactas (`AlarmManager`):** Para agendar notificaciones precisas al segundo exacto.
   - **Overlay Permissions & Full-Screen Intent:** Para lanzar y pintar la interfaz de alarma sobre la pantalla de bloqueo y otras aplicaciones en primer plano.
+  - **Selector de Tonos de Sistema (`RingtoneManager`):** Para abrir la actividad nativa de Android y capturar la URI/Título de sonidos del sistema.
