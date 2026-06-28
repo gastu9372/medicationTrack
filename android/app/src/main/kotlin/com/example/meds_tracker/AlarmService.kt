@@ -64,7 +64,21 @@ class AlarmService : Service() {
 
     private fun playAlarmSound() {
         try {
-            var alarmUri: Uri? = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val customUriStr = prefs.getString("flutter.custom_alarm_uri", null)
+            
+            var alarmUri: Uri? = null
+            if (!customUriStr.isNullOrEmpty()) {
+                try {
+                    alarmUri = Uri.parse(customUriStr)
+                } catch (e: Exception) {
+                    Log.e("AlarmService", "Failed to parse custom alarm URI: ${e.message}")
+                }
+            }
+            
+            if (alarmUri == null) {
+                alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            }
             if (alarmUri == null) {
                 alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
             }
@@ -86,6 +100,33 @@ class AlarmService : Service() {
             }
         } catch (e: Exception) {
             Log.e("AlarmService", "Failed to play alarm ringtone: ${e.message}")
+            playDefaultFallbackSound()
+        }
+    }
+
+    private fun playDefaultFallbackSound() {
+        try {
+            val fallbackUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+            if (fallbackUri != null) {
+                mediaPlayer?.release()
+                mediaPlayer = MediaPlayer().apply {
+                    setDataSource(this@AlarmService, fallbackUri)
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build()
+                    )
+                    isLooping = true
+                    prepare()
+                    start()
+                }
+            }
+        } catch (e2: Exception) {
+            Log.e("AlarmService", "Failed to play default fallback ringtone: ${e2.message}")
         }
     }
 

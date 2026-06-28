@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/meds_controller.dart';
 import '../main.dart';
@@ -24,6 +25,10 @@ class _DashboardViewState extends State<DashboardView> {
   };
   bool _isLoading = true;
 
+  bool _useAlarmSound = true;
+  String _customAlarmUri = '';
+  String _customAlarmTitle = 'Tono predeterminado';
+
   final List<String> _weekDaysShort = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
   @override
@@ -34,6 +39,18 @@ class _DashboardViewState extends State<DashboardView> {
 
   Future<void> _checkPermissionsAndLoad() async {
     setState(() => _isLoading = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _useAlarmSound = prefs.getBool('use_alarm_sound') ?? true;
+        _customAlarmUri = prefs.getString('custom_alarm_uri') ?? '';
+        _customAlarmTitle = prefs.getString('custom_alarm_title') ?? 'Tono predeterminado';
+      });
+    } catch (e) {
+      debugPrint("Error loading alarm preferences: $e");
+    }
+
     await _controller.checkAndRequestPermissions();
     final detail = await _controller.checkPermissionsDetail();
     final granted = detail.values.every((v) => v);
@@ -41,6 +58,10 @@ class _DashboardViewState extends State<DashboardView> {
       _permissionsGranted = granted;
       _permissionsDetail = detail;
     });
+
+    // Run safety net to ensure all active medications have future scheduled alarms
+    await _controller.checkAndRescheduleAlarms();
+
     await _loadTimeline();
   }
 
@@ -713,6 +734,50 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
+  Future<void> _updateAlarmSoundSetting(bool value, StateSetter setBottomSheetState) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('use_alarm_sound', value);
+      setBottomSheetState(() {
+        _useAlarmSound = value;
+      });
+      setState(() {
+        _useAlarmSound = value;
+      });
+    } catch (e) {
+      debugPrint("Error updating alarm sound setting: $e");
+    }
+  }
+
+  Future<void> _pickAndSaveRingtone(StateSetter setBottomSheetState) async {
+    const platform = MethodChannel('com.example.medstracker/alarms');
+    try {
+      final result = await platform.invokeMethod('pickRingtone', {
+        'currentUri': _customAlarmUri,
+      });
+      if (result != null) {
+        final map = Map<String, dynamic>.from(result);
+        final uri = map['uri'] as String;
+        final title = map['title'] as String;
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('custom_alarm_uri', uri);
+        await prefs.setString('custom_alarm_title', title);
+
+        setBottomSheetState(() {
+          _customAlarmUri = uri;
+          _customAlarmTitle = title;
+        });
+        setState(() {
+          _customAlarmUri = uri;
+          _customAlarmTitle = title;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error picking ringtone: $e");
+    }
+  }
+
   // --- Show Settings Bottom Sheet with Theme Mode and Permissions Settings ---
   void _showSettingsBottomSheet() {
     showModalBottomSheet(
@@ -824,6 +889,105 @@ class _DashboardViewState extends State<DashboardView> {
                             cardBg: cardBg,
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Section: Alert settings
+                      Text(
+                        "Configuración de Alertas",
+                        style: TextStyle(
+                          color: subTextColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: cardBg,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "Ruido tipo alarma",
+                                        style: TextStyle(
+                                          color: titleColor,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        "Sonido continuo y vibración persistente al alertar",
+                                        style: TextStyle(
+                                          color: subTextColor,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Switch(
+                                  value: _useAlarmSound,
+                                  activeColor: const Color(0xFF6366F1),
+                                  onChanged: (val) => _updateAlarmSoundSetting(val, setBottomSheetState),
+                                ),
+                              ],
+                            ),
+                            if (_useAlarmSound) ...[
+                              const Divider(height: 20, thickness: 1),
+                              InkWell(
+                                onTap: () => _pickAndSaveRingtone(setBottomSheetState),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              "Sonido de la alarma",
+                                              style: TextStyle(
+                                                color: titleColor,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              _customAlarmTitle.isEmpty ? "Tono predeterminado" : _customAlarmTitle,
+                                              style: const TextStyle(
+                                                color: Color(0xFF6366F1),
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(Icons.chevron_right, color: Color(0xFF6366F1)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 32),
 

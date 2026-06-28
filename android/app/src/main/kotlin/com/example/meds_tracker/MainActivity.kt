@@ -7,17 +7,62 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.annotation.NonNull
+import android.media.RingtoneManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.example.medstracker/alarms"
+    private val RINGTONE_PICKER_REQUEST_CODE = 999
+    private var pendingResult: MethodChannel.Result? = null
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == RINGTONE_PICKER_REQUEST_CODE) {
+            if (resultCode == RESULT_OK && data != null) {
+                val uri = data.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+                if (uri != null) {
+                    val ringtone = RingtoneManager.getRingtone(this, uri)
+                    val title = ringtone.getTitle(this) ?: "Tono seleccionado"
+                    
+                    val resultData = mapOf(
+                        "uri" to uri.toString(),
+                        "title" to title
+                    )
+                    pendingResult?.success(resultData)
+                } else {
+                    pendingResult?.success(null)
+                }
+            } else {
+                pendingResult?.success(null)
+            }
+            pendingResult = null
+        }
+    }
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
+                "pickRingtone" -> {
+                    pendingResult = result
+                    val currentUriStr = call.argument<String>("currentUri")
+                    val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM or RingtoneManager.TYPE_RINGTONE)
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Seleccionar tono de alarma")
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                        
+                        if (!currentUriStr.isNullOrEmpty()) {
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(currentUriStr))
+                        } else {
+                            val defaultUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, defaultUri)
+                        }
+                    }
+                    startActivityForResult(intent, RINGTONE_PICKER_REQUEST_CODE)
+                }
                 "scheduleAlarm" -> {
                     val alarmId = call.argument<Int>("alarmId")
                     val triggerTimeMs = call.argument<Long>("triggerTimeMs")

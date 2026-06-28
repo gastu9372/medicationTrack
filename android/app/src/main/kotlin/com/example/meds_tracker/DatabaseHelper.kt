@@ -142,4 +142,28 @@ class DatabaseHelper(private val context: Context) {
         }
         return list
     }
+
+    fun getMedicineSchedule(medicineId: Int): Pair<String, String>? {
+        val db = getReadableDatabase() ?: return null
+        var cursor: Cursor? = null
+        try {
+            cursor = db.rawQuery(
+                "SELECT schedule_type, schedule_value FROM medicines WHERE id = ? AND is_active = 1",
+                arrayOf(medicineId.toString())
+            )
+            if (cursor != null && cursor.moveToFirst()) {
+                val typeIdx = cursor.getColumnIndexOrThrow("schedule_type")
+                val valueIdx = cursor.getColumnIndexOrThrow("schedule_value")
+                val type = cursor.getString(typeIdx)
+                val value = cursor.getString(valueIdx)
+                return Pair(type, value)
+            }
+        } catch (e: Exception) {
+            Log.e("DatabaseHelper", "Error getting medicine schedule: ${e.message}")
+        } finally {
+            cursor?.close()
+            db.close()
+        }
+        return null
+    }
 }

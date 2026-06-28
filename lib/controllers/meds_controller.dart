@@ -283,6 +283,7 @@ class MedsController {
     try {
       await _channel.invokeMethod('cancelAlarm', {'alarmId': alarmId});
     } catch (_) {}
+    await checkAndRescheduleAlarms();
   }
 
   Future<void> markMissed(int alarmId, int medicineId, int scheduledTimeMs) async {
@@ -296,6 +297,7 @@ class MedsController {
     try {
       await _channel.invokeMethod('cancelAlarm', {'alarmId': alarmId});
     } catch (_) {}
+    await checkAndRescheduleAlarms();
   }
 
   Future<void> markSnoozed(int alarmId, int medicineId, int scheduledTimeMs) async {
@@ -355,5 +357,74 @@ class MedsController {
       }
     }
     return complianceMap;
+  }
+
+  Future<void> checkAndRescheduleAlarms() async {
+    try {
+      final medicines = await _dbHelper.queryAllMedicines();
+      final now = DateTime.now();
+      final nowMs = now.millisecondsSinceEpoch;
+
+      for (var med in medicines) {
+        if (med['is_active'] != 1) continue;
+
+        final medId = med['id'] as int;
+        final scheduleType = med['schedule_type'] as String;
+        final scheduleValue = med['schedule_value'] as String?;
+        
+        if (scheduleValue == null) continue;
+        
+        final data = jsonDecode(scheduleValue);
+        final List<dynamic> times = data['times'] ?? [];
+        final List<dynamic> days = (data['days'] as List<dynamic>?)?.map((e) => e as int).toList() ?? [];
+
+        final futureAlarms = await _dbHelper.queryFutureAlarmsForMedicine(medId, nowMs);
+
+        for (String timeStr in times) {
+          final parts = timeStr.split(':');
+          final hour = int.parse(parts[0]);
+          final minute = int.parse(parts[1]);
+
+          // Calculate next occurrence starting from now
+          DateTime nextOccurrence;
+          if (scheduleType == 'daily') {
+            final todayTime = DateTime(now.year, now.month, now.day, hour, minute);
+            if (todayTime.isAfter(now)) {
+              nextOccurrence = todayTime;
+            } else {
+              nextOccurrence = todayTime.add(const Duration(days: 1));
+            }
+          } else {
+            // Days of the week
+            if (days.isEmpty) continue;
+            nextOccurrence = _calculateNextOccurrenceForDays(timeStr, List<int>.from(days));
+          }
+
+          final targetTimeMs = nextOccurrence.millisecondsSinceEpoch;
+
+          // Check if there is a pending alarm for this time slot (within 1 minute range)
+          bool hasFutureAlarm = false;
+          for (var alarm in futureAlarms) {
+            final alarmTime = alarm['scheduled_time'] as int;
+            if ((alarmTime - targetTimeMs).abs() < 60000) {
+              hasFutureAlarm = true;
+              break;
+            }
+          }
+
+          if (!hasFutureAlarm) {
+            print("Safety Net: Rescheduling missing alarm for medicine $medId at $nextOccurrence");
+            final newAlarmId = await _dbHelper.insertAlarm({
+              'medicine_id': medId,
+              'scheduled_time': targetTimeMs,
+              'status': 'pending',
+            });
+            await _registerSystemAlarm(newAlarmId, targetTimeMs, medId);
+          }
+        }
+      }
+    } catch (e) {
+      print("Error in safety net checkAndRescheduleAlarms: $e");
+    }
   }
 }

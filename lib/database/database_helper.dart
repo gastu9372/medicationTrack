@@ -139,6 +139,15 @@ class DatabaseHelper {
     );
   }
 
+  Future<List<Map<String, dynamic>>> queryFutureAlarmsForMedicine(int medicineId, int nowMs) async {
+    final db = await instance.database;
+    return await db.query(
+      'alarms',
+      where: 'medicine_id = ? AND status = ? AND scheduled_time > ?',
+      whereArgs: [medicineId, 'pending', nowMs],
+    );
+  }
+
   // --- Compliance Logs operations ---
   Future<int> insertComplianceLog(Map<String, dynamic> row) async {
     final db = await instance.database;
